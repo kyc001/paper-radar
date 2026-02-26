@@ -1,12 +1,58 @@
-# Paper Radar
+# paper-radar
 
-一个面向研究者/开发者的论文雷达工具：自动抓取、筛选、去重、摘要并推送关注方向（如 3D/Video、training-free、memory consistency）。
+`paper-radar` is a Go CLI for fetching arXiv papers, deduplicating by paper ID, scoring by keyword frequency, and generating a daily Markdown digest.
 
-## 目标
-- 每日自动发现高相关论文
-- 低噪声筛选（关键词 + 规则）
-- 输出中文摘要与可追溯来源
-- 支持飞书/Telegram/Markdown 发布
+## v0.1.0 Scaffold Features
 
-## 状态
-- 当前阶段：v0.1.0 初始化
+- Go module: `github.com/kyc001/paper-radar`
+- CLI commands: `fetch`, `digest`
+- YAML config with topics and keywords
+- arXiv Atom API fetch via `net/http` + `encoding/xml`
+- Local dedupe/state in `.paper-radar/state.json`
+- Keyword frequency scoring on title + summary
+- Markdown digest output to `outputs/YYYY-MM-DD.md`
+
+## Setup
+
+1. Copy sample config:
+
+```bash
+cp config.example.yaml config.yaml
+```
+
+2. Build:
+
+```bash
+go build ./cmd/paper-radar
+```
+
+## Commands
+
+### Fetch papers
+
+```bash
+go run ./cmd/paper-radar fetch -config config.yaml
+```
+
+Optional flags:
+
+- `-state` state file path (default `.paper-radar/state.json`)
+- `-max-results` override max results per topic
+
+### Generate digest
+
+```bash
+go run ./cmd/paper-radar digest -state .paper-radar/state.json -out outputs
+```
+
+Optional flags:
+
+- `-date YYYY-MM-DD` write digest for a specific date
+
+## Testing
+
+Run all tests:
+
+```bash
+go test ./...
+```

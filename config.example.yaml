@@ -1,0 +1,15 @@
+max_results: 20
+topics:
+  - name: "Training-Free Vision"
+    query: "cat:cs.CV"
+    keywords:
+      - "training-free"
+      - "zero-shot"
+      - "test-time"
+      - "inference"
+  - name: "LLM Agents"
+    keywords:
+      - "agent"
+      - "tool use"
+      - "planning"
+      - "memory"
