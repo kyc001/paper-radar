@@ -2,7 +2,7 @@
 
 `paper-radar` 是一个用于论文追踪的 Go CLI：支持多数据源抓取、按关键词打分过滤、去重，并生成每日 Markdown 摘要。
 
-## v0.3.0 功能
+## v0.4.0 功能
 
 - 命令：`fetch`、`digest`、`run`
 - 多数据源抓取：
@@ -12,15 +12,19 @@
 - YAML 配置支持：
   - `max_results`
   - `min_score`
+  - `feishu_webhook`
   - `topics[].source`
   - `topics[].query`
   - `topics[].keywords`
   - `topics[].kimi_summary`
 - 最低分过滤优先级：
   - CLI 覆盖 > topic `min_score` > 全局 `min_score` > 默认 `1`
+- 摘要条数控制：
+  - `digest/run` 支持 `-top N`（只输出前 N 条）
+- 飞书通知地址优先级（`run`）：
+  - `-feishu-webhook` > `config.yaml: feishu_webhook` > 环境变量 `PAPER_RADAR_FEISHU_WEBHOOK`
 - 本地状态与去重：`.paper-radar/state.json`
 - 摘要输出：`outputs/YYYY-MM-DD.md`
-- `run` 执行后可选飞书 Webhook 推送
 
 ## 快速开始
 
@@ -60,6 +64,7 @@ go run ./cmd/paper-radar digest -state .paper-radar/state.json -out outputs
 可选参数：
 
 - `-date YYYY-MM-DD` 指定输出日期
+- `-top 20` 仅输出前 20 篇（其余保留在 pending，留待下次 digest）
 
 ### 3) 一键流程（run = fetch + digest + 可选通知）
 
@@ -73,6 +78,7 @@ go run ./cmd/paper-radar run -config config.yaml -out outputs
 - `-date YYYY-MM-DD`
 - `-max-results`
 - `-min-score`
+- `-top`
 - `-with-kimi`
 - `-feishu-webhook https://open.feishu.cn/open-apis/bot/v2/hook/xxxxx`
 

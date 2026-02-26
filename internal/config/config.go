@@ -9,9 +9,10 @@ import (
 )
 
 type Config struct {
-	MaxResults int
-	MinScore   int
-	Topics     []Topic
+	MaxResults    int
+	MinScore      int
+	FeishuWebhook string
+	Topics        []Topic
 }
 
 type Topic struct {
@@ -50,6 +51,8 @@ func (c *Config) Validate() error {
 	if c.MinScore < 0 {
 		return fmt.Errorf("min_score must be >= 0")
 	}
+
+	c.FeishuWebhook = strings.TrimSpace(c.FeishuWebhook)
 
 	for i, topic := range c.Topics {
 		topic.Name = strings.TrimSpace(topic.Name)
@@ -222,6 +225,15 @@ func parseYAMLSubset(content string) (Config, error) {
 			} else {
 				cfg.MinScore = n
 			}
+			inKeywords = false
+			continue
+		}
+
+		if strings.HasPrefix(line, "feishu_webhook:") {
+			if current != nil && indent > 0 {
+				return Config{}, fmt.Errorf("line %d: feishu_webhook must be declared at top level", lineNo)
+			}
+			cfg.FeishuWebhook = parseScalar(strings.TrimSpace(strings.TrimPrefix(line, "feishu_webhook:")))
 			inKeywords = false
 			continue
 		}

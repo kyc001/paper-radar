@@ -13,6 +13,7 @@ type DigestOptions struct {
 	StatePath string
 	OutputDir string
 	Date      time.Time
+	TopN      int
 }
 
 func RunDigest(opts DigestOptions) (string, int, error) {
@@ -24,13 +25,22 @@ func RunDigest(opts DigestOptions) (string, int, error) {
 
 	scoring.SortByScore(st.Pending)
 
-	outputPath, err := digest.WriteDaily(defaultOutputDir(opts.OutputDir), opts.Date, st.Pending)
+	target := st.Pending
+	if opts.TopN > 0 && len(target) > opts.TopN {
+		target = st.Pending[:opts.TopN]
+	}
+
+	outputPath, err := digest.WriteDaily(defaultOutputDir(opts.OutputDir), opts.Date, target)
 	if err != nil {
 		return "", 0, fmt.Errorf("write digest: %w", err)
 	}
 
-	count := len(st.Pending)
-	st.Pending = nil
+	count := len(target)
+	if count >= len(st.Pending) {
+		st.Pending = nil
+	} else {
+		st.Pending = st.Pending[count:]
+	}
 
 	if err := store.Save(st); err != nil {
 		return "", 0, fmt.Errorf("save state: %w", err)

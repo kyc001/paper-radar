@@ -13,6 +13,7 @@ func TestLoadParsesMinScoreAndMaxResults(t *testing.T) {
 	path := filepath.Join(dir, "config.yaml")
 	content := `max_results: 20
 min_score: 2
+feishu_webhook: "https://open.feishu.cn/open-apis/bot/v2/hook/test"
 topics:
   - name: "Topic A"
     source: "paperscool"
@@ -41,6 +42,9 @@ topics:
 	}
 	if cfg.MinScore != 2 {
 		t.Fatalf("expected MinScore=2, got %d", cfg.MinScore)
+	}
+	if cfg.FeishuWebhook == "" {
+		t.Fatalf("expected FeishuWebhook parsed")
 	}
 	if len(cfg.Topics) != 2 {
 		t.Fatalf("expected 2 topics, got %d", len(cfg.Topics))

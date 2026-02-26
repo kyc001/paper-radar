@@ -1,5 +1,8 @@
 max_results: 20
 min_score: 2
+# 可选：run 命令不传 -feishu-webhook 时，会回退使用这里的地址
+feishu_webhook: ""
+
 topics:
   - name: "Training-Free Vision (arXiv API)"
     source: "arxiv"
@@ -14,7 +17,7 @@ topics:
 
   - name: "Agent Papers (papers.cool + Kimi)"
     source: "paperscool"
-    query: "cs.AI"        # also supports full feed URL
+    query: "cs.AI"        # 也支持完整 feed URL
     kimi_summary: true
     min_score: 2
     keywords:
