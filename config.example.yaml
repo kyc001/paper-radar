@@ -1,7 +1,10 @@
 max_results: 20
+min_score: 2
 topics:
   - name: "Training-Free Vision"
     query: "cat:cs.CV"
+    max_results: 30
+    min_score: 3
     keywords:
       - "training-free"
       - "zero-shot"

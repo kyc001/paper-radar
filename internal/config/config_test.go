@@ -1,0 +1,74 @@
+package config
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestLoadParsesMinScoreAndMaxResults(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	content := `max_results: 20
+min_score: 2
+topics:
+  - name: "Topic A"
+    query: "cat:cs.CV"
+    max_results: 10
+    min_score: 4
+    keywords:
+      - "video"
+      - "training-free"
+  - name: "Topic B"
+    keywords:
+      - "memory"
+`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+
+	if cfg.MaxResults != 20 {
+		t.Fatalf("expected MaxResults=20, got %d", cfg.MaxResults)
+	}
+	if cfg.MinScore != 2 {
+		t.Fatalf("expected MinScore=2, got %d", cfg.MinScore)
+	}
+	if len(cfg.Topics) != 2 {
+		t.Fatalf("expected 2 topics, got %d", len(cfg.Topics))
+	}
+	if cfg.Topics[0].MaxResults != 10 || cfg.Topics[0].MinScore != 4 {
+		t.Fatalf("topic A max/min parse mismatch: max=%d min=%d", cfg.Topics[0].MaxResults, cfg.Topics[0].MinScore)
+	}
+}
+
+func TestEffectiveMinScorePrecedence(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{MinScore: 2}
+	topic := Topic{MinScore: 3}
+
+	if got := cfg.EffectiveMinScore(topic, 5); got != 5 {
+		t.Fatalf("cli override should win, got %d", got)
+	}
+	if got := cfg.EffectiveMinScore(topic, 0); got != 3 {
+		t.Fatalf("topic min_score should win, got %d", got)
+	}
+
+	cfg = Config{MinScore: 2}
+	topic = Topic{}
+	if got := cfg.EffectiveMinScore(topic, 0); got != 2 {
+		t.Fatalf("config min_score should win, got %d", got)
+	}
+
+	cfg = Config{}
+	if got := cfg.EffectiveMinScore(topic, 0); got != 1 {
+		t.Fatalf("default min_score should be 1, got %d", got)
+	}
+}

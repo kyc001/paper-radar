@@ -10,6 +10,7 @@ import (
 
 type Config struct {
 	MaxResults int
+	MinScore   int
 	Topics     []Topic
 }
 
@@ -18,6 +19,7 @@ type Topic struct {
 	Query      string
 	Keywords   []string
 	MaxResults int
+	MinScore   int
 }
 
 func Load(path string) (Config, error) {
@@ -43,6 +45,10 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("config must include at least one topic")
 	}
 
+	if c.MinScore < 0 {
+		return fmt.Errorf("min_score must be >= 0")
+	}
+
 	for i, topic := range c.Topics {
 		topic.Name = strings.TrimSpace(topic.Name)
 		if topic.Name == "" {
@@ -54,6 +60,9 @@ func (c *Config) Validate() error {
 
 		if len(topic.Keywords) == 0 {
 			return fmt.Errorf("topic[%d] (%s) must have at least one keyword", i, topic.Name)
+		}
+		if topic.MinScore < 0 {
+			return fmt.Errorf("topic[%d] (%s) min_score must be >= 0", i, topic.Name)
 		}
 
 		c.Topics[i] = topic
@@ -86,6 +95,19 @@ func (c Config) EffectiveMaxResults(topic Topic, override int) int {
 		return c.MaxResults
 	}
 	return 25
+}
+
+func (c Config) EffectiveMinScore(topic Topic, override int) int {
+	if override > 0 {
+		return override
+	}
+	if topic.MinScore > 0 {
+		return topic.MinScore
+	}
+	if c.MinScore > 0 {
+		return c.MinScore
+	}
+	return 1
 }
 
 func normalizeKeywords(keywords []string) []string {
@@ -128,7 +150,7 @@ func parseYAMLSubset(content string) (Config, error) {
 
 		if strings.HasPrefix(line, "- ") {
 			item := strings.TrimSpace(strings.TrimPrefix(line, "- "))
-			if inKeywords {
+			if inKeywords && !strings.HasPrefix(item, "name:") {
 				if current == nil {
 					return Config{}, fmt.Errorf("line %d: keyword item appears before a topic", lineNo)
 				}
@@ -169,6 +191,21 @@ func parseYAMLSubset(content string) (Config, error) {
 				current.MaxResults = n
 			} else {
 				cfg.MaxResults = n
+			}
+			inKeywords = false
+			continue
+		}
+
+		if strings.HasPrefix(line, "min_score:") {
+			value := strings.TrimSpace(strings.TrimPrefix(line, "min_score:"))
+			n, err := strconv.Atoi(value)
+			if err != nil {
+				return Config{}, fmt.Errorf("line %d: invalid min_score %q", lineNo, value)
+			}
+			if current != nil && indent > 0 {
+				current.MinScore = n
+			} else {
+				cfg.MinScore = n
 			}
 			inKeywords = false
 			continue

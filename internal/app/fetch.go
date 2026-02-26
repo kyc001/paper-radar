@@ -18,6 +18,7 @@ type FetchOptions struct {
 	ConfigPath string
 	StatePath  string
 	MaxResults int
+	MinScore   int
 }
 
 type FetchResult struct {
@@ -40,10 +41,12 @@ func RunFetch(ctx context.Context, opts FetchOptions) (FetchResult, error) {
 
 	client := arxiv.NewClient()
 	newByID := make(map[string]model.ScoredPaper)
+	originalSeen := cloneSeen(st.SeenIDs)
 	fetchedCount := 0
 
 	for _, topic := range cfg.Topics {
 		maxResults := cfg.EffectiveMaxResults(topic, opts.MaxResults)
+		minScore := cfg.EffectiveMinScore(topic, opts.MinScore)
 		query := cfg.TopicQuery(topic)
 
 		papers, err := client.Fetch(ctx, query, maxResults)
@@ -53,31 +56,7 @@ func RunFetch(ctx context.Context, opts FetchOptions) (FetchResult, error) {
 
 		fetchedCount += len(papers)
 		for _, paper := range papers {
-			if st.SeenIDs[paper.ID] {
-				continue
-			}
-
-			// Mark as seen immediately to avoid repeated processing in later runs.
-			st.SeenIDs[paper.ID] = true
-
-			score := scoring.ScorePaper(paper, topic.Keywords)
-			if score <= 0 {
-				continue
-			}
-
-			existing, ok := newByID[paper.ID]
-			if !ok {
-				newByID[paper.ID] = model.ScoredPaper{
-					Paper:  paper,
-					Score:  score,
-					Topics: []string{topic.Name},
-				}
-				continue
-			}
-
-			existing.Score += score
-			existing.Topics = appendIfMissing(existing.Topics, topic.Name)
-			newByID[paper.ID] = existing
+			processPaper(originalSeen, st.SeenIDs, newByID, topic, paper, minScore)
 		}
 	}
 
@@ -93,6 +72,39 @@ func RunFetch(ctx context.Context, opts FetchOptions) (FetchResult, error) {
 		Queued:  len(newPapers),
 		Topics:  len(cfg.Topics),
 	}, nil
+}
+
+func processPaper(originalSeen map[string]bool, seenIDs map[string]bool, byID map[string]model.ScoredPaper, topic config.Topic, paper model.Paper, minScore int) {
+	if originalSeen[paper.ID] {
+		return
+	}
+
+	score := scoring.ScorePaper(paper, topic.Keywords)
+	if score >= minScore {
+		existing, ok := byID[paper.ID]
+		if !ok {
+			byID[paper.ID] = model.ScoredPaper{
+				Paper:  paper,
+				Score:  score,
+				Topics: []string{topic.Name},
+			}
+		} else {
+			existing.Score += score
+			existing.Topics = appendIfMissing(existing.Topics, topic.Name)
+			byID[paper.ID] = existing
+		}
+	}
+
+	// Mark as seen even if it didn't pass threshold, so the next run won't reprocess it.
+	seenIDs[paper.ID] = true
+}
+
+func cloneSeen(seen map[string]bool) map[string]bool {
+	cloned := make(map[string]bool, len(seen))
+	for id, ok := range seen {
+		cloned[id] = ok
+	}
+	return cloned
 }
 
 func mapToSortedSlice(byID map[string]model.ScoredPaper) []model.ScoredPaper {
