@@ -1,21 +1,26 @@
 # paper-radar
 
-`paper-radar` is a Go CLI for fetching arXiv papers, deduplicating by paper ID, scoring by keyword frequency, and generating a daily Markdown digest.
+`paper-radar` is a Go CLI for fetching papers, deduplicating by paper ID, scoring by keyword frequency, and generating a daily Markdown digest.
 
-## v0.2.0 Features
+## v0.3.0 Features
 
-- Go module: `github.com/kyc001/paper-radar`
 - CLI commands: `fetch`, `digest`, `run`
+- Multi-source collection:
+  - `arxiv` (official arXiv API)
+  - `paperscool` (papers.cool feed)
+- `paperscool` optional Kimi summary enrichment (`kimi_summary: true` or `-with-kimi`)
 - YAML config with global/per-topic controls:
   - `max_results`
   - `min_score`
-  - `topics[].keywords` / `topics[].query`
-- arXiv Atom API fetch via `net/http` + `encoding/xml`
-- Local dedupe/state in `.paper-radar/state.json`
-- Keyword frequency scoring on title + summary
-- Minimum score filtering with precedence:
+  - `topics[].source`
+  - `topics[].query`
+  - `topics[].keywords`
+  - `topics[].kimi_summary`
+- Minimum score filtering precedence:
   - CLI override > topic `min_score` > global `min_score` > default `1`
+- Local dedupe/state in `.paper-radar/state.json`
 - Markdown digest output to `outputs/YYYY-MM-DD.md`
+- Optional Feishu webhook notification after `run`
 
 ## Setup
 
@@ -44,6 +49,7 @@ Optional flags:
 - `-state` state file path (default `.paper-radar/state.json`)
 - `-max-results` override max results per topic
 - `-min-score` override minimum score threshold
+- `-with-kimi` force papers.cool Kimi summary enrichment
 
 ### Generate digest
 
@@ -55,7 +61,7 @@ Optional flags:
 
 - `-date YYYY-MM-DD` write digest for a specific date
 
-### One-shot pipeline (fetch + digest)
+### One-shot pipeline (fetch + digest + optional Feishu notify)
 
 ```bash
 go run ./cmd/paper-radar run -config config.yaml -out outputs
@@ -67,10 +73,14 @@ Optional flags:
 - `-date YYYY-MM-DD`
 - `-max-results`
 - `-min-score`
+- `-with-kimi`
+- `-feishu-webhook https://open.feishu.cn/open-apis/bot/v2/hook/xxxxx`
+
+## Config Example
+
+See [`config.example.yaml`](./config.example.yaml).
 
 ## Testing
-
-Run all tests:
 
 ```bash
 go test ./...

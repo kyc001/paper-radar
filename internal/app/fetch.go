@@ -8,6 +8,7 @@ import (
 	"github.com/kyc001/paper-radar/internal/arxiv"
 	"github.com/kyc001/paper-radar/internal/config"
 	"github.com/kyc001/paper-radar/internal/model"
+	"github.com/kyc001/paper-radar/internal/paperscool"
 	"github.com/kyc001/paper-radar/internal/scoring"
 	"github.com/kyc001/paper-radar/internal/state"
 )
@@ -19,6 +20,7 @@ type FetchOptions struct {
 	StatePath  string
 	MaxResults int
 	MinScore   int
+	WithKimi   bool
 }
 
 type FetchResult struct {
@@ -39,7 +41,8 @@ func RunFetch(ctx context.Context, opts FetchOptions) (FetchResult, error) {
 		return FetchResult{}, fmt.Errorf("load state: %w", err)
 	}
 
-	client := arxiv.NewClient()
+	arxivClient := arxiv.NewClient()
+	papersCoolClient := paperscool.NewClient()
 	newByID := make(map[string]model.ScoredPaper)
 	originalSeen := cloneSeen(st.SeenIDs)
 	fetchedCount := 0
@@ -49,7 +52,13 @@ func RunFetch(ctx context.Context, opts FetchOptions) (FetchResult, error) {
 		minScore := cfg.EffectiveMinScore(topic, opts.MinScore)
 		query := cfg.TopicQuery(topic)
 
-		papers, err := client.Fetch(ctx, query, maxResults)
+		var papers []model.Paper
+		switch topic.Source {
+		case "paperscool":
+			papers, err = papersCoolClient.Fetch(ctx, query, maxResults, opts.WithKimi || topic.KimiSummary)
+		default:
+			papers, err = arxivClient.Fetch(ctx, query, maxResults)
+		}
 		if err != nil {
 			return FetchResult{}, fmt.Errorf("fetch topic %q: %w", topic.Name, err)
 		}

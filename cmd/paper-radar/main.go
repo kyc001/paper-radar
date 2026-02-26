@@ -5,9 +5,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/kyc001/paper-radar/internal/app"
+	"github.com/kyc001/paper-radar/internal/notify"
 )
 
 func main() {
@@ -37,6 +39,7 @@ func runFetch(ctx context.Context, args []string) {
 	statePath := fs.String("state", app.DefaultStatePath, "Path to JSON state file")
 	maxResults := fs.Int("max-results", 0, "Override max results per topic")
 	minScore := fs.Int("min-score", 1, "Override minimum score threshold")
+	withKimi := fs.Bool("with-kimi", false, "Enable papers.cool Kimi summary enrichment")
 	fs.Parse(args)
 
 	result, err := app.RunFetch(ctx, app.FetchOptions{
@@ -44,6 +47,7 @@ func runFetch(ctx context.Context, args []string) {
 		StatePath:  *statePath,
 		MaxResults: *maxResults,
 		MinScore:   *minScore,
+		WithKimi:   *withKimi,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "fetch failed: %v\n", err)
@@ -83,6 +87,8 @@ func runAll(ctx context.Context, args []string) {
 	dateStr := fs.String("date", "", "Digest date (YYYY-MM-DD), defaults to today")
 	maxResults := fs.Int("max-results", 0, "Override max results per topic")
 	minScore := fs.Int("min-score", 1, "Override minimum score threshold")
+	withKimi := fs.Bool("with-kimi", false, "Enable papers.cool Kimi summary enrichment")
+	feishuWebhook := fs.String("feishu-webhook", "", "Feishu bot webhook URL for digest notification")
 	fs.Parse(args)
 
 	fetchResult, err := app.RunFetch(ctx, app.FetchOptions{
@@ -90,6 +96,7 @@ func runAll(ctx context.Context, args []string) {
 		StatePath:  *statePath,
 		MaxResults: *maxResults,
 		MinScore:   *minScore,
+		WithKimi:   *withKimi,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "run failed in fetch stage: %v\n", err)
@@ -108,6 +115,30 @@ func runAll(ctx context.Context, args []string) {
 		os.Exit(1)
 	}
 	fmt.Printf("digest: path=%s papers=%d\n", path, count)
+
+	if strings.TrimSpace(*feishuWebhook) != "" {
+		content := ""
+		if raw, readErr := os.ReadFile(path); readErr == nil {
+			content = truncateText(string(raw), 1200)
+		}
+		text := fmt.Sprintf("paper-radar run completed\nfetch: fetched=%d queued=%d topics=%d\ndigest: papers=%d\nfile: %s", fetchResult.Fetched, fetchResult.Queued, fetchResult.Topics, count, path)
+		if content != "" {
+			text += "\n\n" + content
+		}
+		if err := notify.NewFeishuWebhook().SendText(ctx, *feishuWebhook, text); err != nil {
+			fmt.Fprintf(os.Stderr, "feishu notify failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("feishu: notification sent")
+	}
+}
+
+func truncateText(s string, max int) string {
+	s = strings.TrimSpace(s)
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "..."
 }
 
 func parseDateOrNow(dateStr string) time.Time {
@@ -126,7 +157,7 @@ func parseDateOrNow(dateStr string) time.Time {
 func printUsage() {
 	fmt.Fprintln(os.Stderr, "paper-radar: track and score arXiv papers")
 	fmt.Fprintln(os.Stderr, "usage:")
-	fmt.Fprintln(os.Stderr, "  paper-radar fetch  -config config.yaml")
+	fmt.Fprintln(os.Stderr, "  paper-radar fetch  -config config.yaml [-with-kimi]")
 	fmt.Fprintln(os.Stderr, "  paper-radar digest -out outputs")
-	fmt.Fprintln(os.Stderr, "  paper-radar run    -config config.yaml -out outputs")
+	fmt.Fprintln(os.Stderr, "  paper-radar run    -config config.yaml -out outputs [-with-kimi] [-feishu-webhook URL]")
 }

@@ -15,11 +15,13 @@ type Config struct {
 }
 
 type Topic struct {
-	Name       string
-	Query      string
-	Keywords   []string
-	MaxResults int
-	MinScore   int
+	Name        string
+	Source      string
+	Query       string
+	Keywords    []string
+	MaxResults  int
+	MinScore    int
+	KimiSummary bool
 }
 
 func Load(path string) (Config, error) {
@@ -55,6 +57,14 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("topic[%d] must have a name", i)
 		}
 
+		topic.Source = strings.ToLower(strings.TrimSpace(topic.Source))
+		if topic.Source == "" {
+			topic.Source = "arxiv"
+		}
+		if topic.Source != "arxiv" && topic.Source != "paperscool" {
+			return fmt.Errorf("topic[%d] (%s) source must be arxiv or paperscool", i, topic.Name)
+		}
+
 		topic.Keywords = normalizeKeywords(topic.Keywords)
 		topic.Query = strings.TrimSpace(topic.Query)
 
@@ -74,6 +84,11 @@ func (c *Config) Validate() error {
 func (c Config) TopicQuery(topic Topic) string {
 	if topic.Query != "" {
 		return topic.Query
+	}
+
+	if topic.Source == "paperscool" {
+		// default papers.cool category when query is omitted
+		return "cs.AI"
 	}
 
 	parts := make([]string, 0, len(topic.Keywords))
@@ -220,6 +235,15 @@ func parseYAMLSubset(content string) (Config, error) {
 			continue
 		}
 
+		if strings.HasPrefix(line, "source:") {
+			if current == nil {
+				return Config{}, fmt.Errorf("line %d: source appears outside a topic", lineNo)
+			}
+			current.Source = parseScalar(strings.TrimSpace(strings.TrimPrefix(line, "source:")))
+			inKeywords = false
+			continue
+		}
+
 		if strings.HasPrefix(line, "query:") {
 			if current == nil {
 				return Config{}, fmt.Errorf("line %d: query appears outside a topic", lineNo)
@@ -234,6 +258,20 @@ func parseYAMLSubset(content string) (Config, error) {
 				return Config{}, fmt.Errorf("line %d: keywords appears outside a topic", lineNo)
 			}
 			inKeywords = true
+			continue
+		}
+
+		if strings.HasPrefix(line, "kimi_summary:") {
+			if current == nil {
+				return Config{}, fmt.Errorf("line %d: kimi_summary appears outside a topic", lineNo)
+			}
+			value := parseScalar(strings.TrimSpace(strings.TrimPrefix(line, "kimi_summary:")))
+			b, err := strconv.ParseBool(strings.ToLower(value))
+			if err != nil {
+				return Config{}, fmt.Errorf("line %d: invalid kimi_summary %q", lineNo, value)
+			}
+			current.KimiSummary = b
+			inKeywords = false
 			continue
 		}
 

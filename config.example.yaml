@@ -1,7 +1,8 @@
 max_results: 20
 min_score: 2
 topics:
-  - name: "Training-Free Vision"
+  - name: "Training-Free Vision (arXiv API)"
+    source: "arxiv"
     query: "cat:cs.CV"
     max_results: 30
     min_score: 3
@@ -10,9 +11,13 @@ topics:
       - "zero-shot"
       - "test-time"
       - "inference"
-  - name: "LLM Agents"
+
+  - name: "Agent Papers (papers.cool + Kimi)"
+    source: "paperscool"
+    query: "cs.AI"        # also supports full feed URL
+    kimi_summary: true
+    min_score: 2
     keywords:
       - "agent"
-      - "tool use"
       - "planning"
       - "memory"

@@ -15,9 +15,11 @@ func TestLoadParsesMinScoreAndMaxResults(t *testing.T) {
 min_score: 2
 topics:
   - name: "Topic A"
-    query: "cat:cs.CV"
+    source: "paperscool"
+    query: "cs.CV"
     max_results: 10
     min_score: 4
+    kimi_summary: true
     keywords:
       - "video"
       - "training-free"
@@ -45,6 +47,15 @@ topics:
 	}
 	if cfg.Topics[0].MaxResults != 10 || cfg.Topics[0].MinScore != 4 {
 		t.Fatalf("topic A max/min parse mismatch: max=%d min=%d", cfg.Topics[0].MaxResults, cfg.Topics[0].MinScore)
+	}
+	if cfg.Topics[0].Source != "paperscool" {
+		t.Fatalf("expected topic source paperscool, got %q", cfg.Topics[0].Source)
+	}
+	if !cfg.Topics[0].KimiSummary {
+		t.Fatalf("expected topic kimi_summary=true")
+	}
+	if cfg.Topics[1].Source != "arxiv" {
+		t.Fatalf("default source should be arxiv, got %q", cfg.Topics[1].Source)
 	}
 }
 
