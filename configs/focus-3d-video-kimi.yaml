@@ -1,0 +1,22 @@
+# 仅关注 3D / Video + training-free + memory/spatial consistency
+max_results: 80
+min_score: 2
+feishu_webhook: ""
+
+topics:
+  - name: "3D/Video Training-Free (papers.cool / cs.CV)"
+    source: "paperscool"
+    query: "cs.CV"
+    kimi_summary: true
+    min_score: 2
+    keywords:
+      - "training-free"
+      - "3d"
+      - "video"
+      - "4d"
+      - "memory"
+      - "spatial"
+      - "consistency"
+      - "streaming"
+      - "long video"
+      - "reconstruction"

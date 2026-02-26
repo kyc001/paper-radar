@@ -93,6 +93,7 @@ func runAll(ctx context.Context, args []string) {
 	topN := fs.Int("top", 0, "Only emit top N papers in this digest (0 means all)")
 	withKimi := fs.Bool("with-kimi", false, "Enable papers.cool Kimi summary enrichment")
 	feishuWebhook := fs.String("feishu-webhook", "", "Feishu bot webhook URL for digest notification")
+	notifyMaxChars := fs.Int("notify-max-chars", 2800, "Max characters per Feishu message chunk")
 	fs.Parse(args)
 
 	cfg, err := config.Load(*configPath)
@@ -131,13 +132,13 @@ func runAll(ctx context.Context, args []string) {
 	if resolvedWebhook != "" {
 		content := ""
 		if raw, readErr := os.ReadFile(path); readErr == nil {
-			content = truncateText(string(raw), 1200)
+			content = strings.TrimSpace(string(raw))
 		}
 		text := fmt.Sprintf("paper-radar run completed\nfetch: fetched=%d queued=%d topics=%d\ndigest: papers=%d\nfile: %s", fetchResult.Fetched, fetchResult.Queued, fetchResult.Topics, count, path)
 		if content != "" {
 			text += "\n\n" + content
 		}
-		if err := notify.NewFeishuWebhook().SendText(ctx, resolvedWebhook, text); err != nil {
+		if err := notify.NewFeishuWebhook().SendLongText(ctx, resolvedWebhook, text, *notifyMaxChars); err != nil {
 			fmt.Fprintf(os.Stderr, "feishu notify failed: %v\n", err)
 			os.Exit(1)
 		}
@@ -159,14 +160,6 @@ func resolveWebhook(cliValue, configValue string) string {
 	return ""
 }
 
-func truncateText(s string, max int) string {
-	s = strings.TrimSpace(s)
-	if len(s) <= max {
-		return s
-	}
-	return s[:max] + "..."
-}
-
 func parseDateOrNow(dateStr string) time.Time {
 	if dateStr == "" {
 		return time.Now()
@@ -185,5 +178,5 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "usage:")
 	fmt.Fprintln(os.Stderr, "  paper-radar fetch  -config config.yaml [-with-kimi]")
 	fmt.Fprintln(os.Stderr, "  paper-radar digest -out outputs [-top 20]")
-	fmt.Fprintln(os.Stderr, "  paper-radar run    -config config.yaml -out outputs [-top 20] [-with-kimi] [-feishu-webhook URL]")
+	fmt.Fprintln(os.Stderr, "  paper-radar run    -config config.yaml -out outputs [-top 20] [-with-kimi] [-feishu-webhook URL] [-notify-max-chars 2800]")
 }

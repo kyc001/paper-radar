@@ -2,7 +2,7 @@
 
 `paper-radar` 是一个用于论文追踪的 Go CLI：支持多数据源抓取、按关键词打分过滤、去重，并生成每日 Markdown 摘要。
 
-## v0.4.0 功能
+## v0.5.0 功能
 
 - 命令：`fetch`、`digest`、`run`
 - 多数据源抓取：
@@ -20,9 +20,11 @@
 - 最低分过滤优先级：
   - CLI 覆盖 > topic `min_score` > 全局 `min_score` > 默认 `1`
 - 摘要条数控制：
-  - `digest/run` 支持 `-top N`（只输出前 N 条）
+  - `digest/run` 支持 `-top N`（只输出前 N 条，剩余保留在 pending）
 - 飞书通知地址优先级（`run`）：
   - `-feishu-webhook` > `config.yaml: feishu_webhook` > 环境变量 `PAPER_RADAR_FEISHU_WEBHOOK`
+- **长消息自动分片推送**（适合完整 Kimi 摘要）：
+  - `run` 会读取完整 digest，并按 `-notify-max-chars` 自动拆分多条 Feishu 消息发送
 - 本地状态与去重：`.paper-radar/state.json`
 - 摘要输出：`outputs/YYYY-MM-DD.md`
 
@@ -81,10 +83,21 @@ go run ./cmd/paper-radar run -config config.yaml -out outputs
 - `-top`
 - `-with-kimi`
 - `-feishu-webhook https://open.feishu.cn/open-apis/bot/v2/hook/xxxxx`
+- `-notify-max-chars 2800`（飞书单条消息最大字符数，超出自动分片）
 
-## 配置示例
+## 研究方向预设（3D/Video + training-free + memory）
 
-请参考 [`config.example.yaml`](./config.example.yaml)。
+内置示例：[`configs/focus-3d-video-kimi.yaml`](./configs/focus-3d-video-kimi.yaml)
+
+示例运行：
+
+```bash
+go run ./cmd/paper-radar run \
+  -config configs/focus-3d-video-kimi.yaml \
+  -with-kimi \
+  -top 5 \
+  -out outputs
+```
 
 ## 测试
 

@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+const defaultMaxChunkChars = 2800
+
 type FeishuWebhook struct {
 	httpClient *http.Client
 }
@@ -53,4 +55,55 @@ func (f *FeishuWebhook) SendText(ctx context.Context, webhookURL, text string) e
 	}
 
 	return nil
+}
+
+func (f *FeishuWebhook) SendLongText(ctx context.Context, webhookURL, text string, maxChunkChars int) error {
+	if maxChunkChars <= 0 {
+		maxChunkChars = defaultMaxChunkChars
+	}
+	parts := splitText(text, maxChunkChars)
+	for i, part := range parts {
+		msg := part
+		if len(parts) > 1 {
+			msg = fmt.Sprintf("[%d/%d]\n%s", i+1, len(parts), part)
+		}
+		if err := f.SendText(ctx, webhookURL, msg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func splitText(text string, maxChunkChars int) []string {
+	clean := strings.TrimSpace(text)
+	if clean == "" {
+		return []string{clean}
+	}
+
+	runes := []rune(clean)
+	if len(runes) <= maxChunkChars {
+		return []string{clean}
+	}
+
+	parts := make([]string, 0)
+	for len(runes) > maxChunkChars {
+		split := maxChunkChars
+		for i := maxChunkChars; i > maxChunkChars/2; i-- {
+			if runes[i-1] == '\n' {
+				split = i
+				break
+			}
+		}
+		parts = append(parts, strings.TrimSpace(string(runes[:split])))
+		runes = runes[split:]
+	}
+
+	tail := strings.TrimSpace(string(runes))
+	if tail != "" {
+		parts = append(parts, tail)
+	}
+	if len(parts) == 0 {
+		return []string{clean}
+	}
+	return parts
 }
