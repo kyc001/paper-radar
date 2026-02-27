@@ -1,4 +1,5 @@
-.paper-radar/state.json
-outputs/*.md
+.paper-radar/
+outputs/
 /paper-radar
+/refetch-kimi
 config.yaml

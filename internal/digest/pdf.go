@@ -3,6 +3,7 @@ package digest
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/jung-kurt/gofpdf"
@@ -14,73 +15,61 @@ func WritePDF(outputDir string, date time.Time, papers []model.ScoredPaper) (str
 	path := filepath.Join(outputDir, filename)
 
 	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf.SetCompression(false) // 禁用压缩，便于调试
+	
+	// 使用内置字体（仅支持 ASCII）
 	pdf.AddPage()
-	pdf.SetFont("Arial", "B", 16)
-
+	pdf.SetFont("Courier", "B", 12)
+	
 	// Title
 	title := fmt.Sprintf("Paper Radar Digest - %s", date.Format("2006-01-02"))
 	pdf.Cell(0, 10, title)
 	pdf.Ln(12)
 
 	if len(papers) == 0 {
-		pdf.SetFont("Arial", "", 12)
+		pdf.SetFont("Courier", "", 11)
 		pdf.Cell(0, 10, "No new papers matched the configured keywords.")
 	} else {
-		pdf.SetFont("Arial", "", 11)
-		lineHeight := 6.0
-		maxWidth := 190.0
+		pdf.SetFont("Courier", "", 9)
+		lineHeight := 4.5
 
 		for i, paper := range papers {
-			// Paper number and title
-			pdf.SetFont("Arial", "B", 12)
-			header := fmt.Sprintf("%d. %s", i+1, paper.Paper.Title)
-			pdf.MultiCell(0, lineHeight, "", "", truncateString(header, 180), false)
-			pdf.Ln(2)
-
-			// Metadata
-			pdf.SetFont("Arial", "", 10)
-			pdf.Cell(0, lineHeight, fmt.Sprintf("Score: %d | Topics: %s", paper.Score, joinStrings(paper.Topics, ", ")))
-			pdf.Ln(lineHeight)
-			pdf.Cell(0, lineHeight, fmt.Sprintf("ID: %s", paper.Paper.ID))
-			pdf.Ln(lineHeight)
-
-			// URL - use monospace for URL
-			pdf.SetFont("Courier", "", 9)
-			pdf.Cell(0, lineHeight, fmt.Sprintf("URL: %s", paper.Paper.URL))
-			pdf.Ln(lineHeight)
-
-			if !paper.Paper.PublishedAt.IsZero() {
-				pdf.SetFont("Arial", "", 10)
-				pdf.Cell(0, lineHeight, fmt.Sprintf("Published: %s", paper.Paper.PublishedAt.Format("2006-01-02")))
-				pdf.Ln(lineHeight)
-			}
-			pdf.Ln(2)
-
-			// Summary with word wrapping
-			pdf.SetFont("Arial", "", 10)
-			summary := paper.Paper.Summary
-			for _, line := range splitText(summary, int(maxWidth)) {
-				pdf.MultiCell(0, lineHeight, "", "", line, false)
-			}
-
-			// Add space between papers
-			pdf.Ln(5)
-
-			// Add page break if needed
-			if pdf.GetY() > 250 {
+			// Page break if needed
+			if pdf.GetY() > 270 {
 				pdf.AddPage()
 			}
+
+			// Header
+			pdf.SetFont("Courier", "B", 10)
+			pdf.Cell(0, lineHeight, fmt.Sprintf("%d. %s", i+1, truncateString(paper.Paper.Title, 70)))
+			pdf.Ln(lineHeight)
+			
+			// Metadata
+			pdf.SetFont("Courier", "", 8)
+			pdf.Cell(0, lineHeight, fmt.Sprintf("Score: %d", paper.Score))
+			pdf.Ln(lineHeight)
+			pdf.Cell(0, lineHeight, fmt.Sprintf("URL: %s", paper.Paper.URL))
+			pdf.Ln(lineHeight * 1.5)
+
+			// Summary (first 1500 chars)
+			summary := truncateString(paper.Paper.Summary, 1500)
+			lines := wrapText(summary, 90)
+			for _, line := range lines {
+				pdf.Cell(0, lineHeight, line)
+				pdf.Ln(lineHeight)
+			}
+
+			// Separator
+			pdf.Ln(3)
+			pdf.Cell(0, 0, strings.Repeat("-", 180))
+			pdf.Ln(5)
 		}
 	}
 
-	if err := pdf.OutputFileAndClose(path); err != nil {
-		return "", err
-	}
-
-	return path, nil
+	err := pdf.OutputFileAndClose(path)
+	return path, err
 }
 
-// truncateString truncates a string to maxLen characters
 func truncateString(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
@@ -88,22 +77,9 @@ func truncateString(s string, maxLen int) string {
 	return s[:maxLen-3] + "..."
 }
 
-// joinStrings joins strings with a separator
-func joinStrings(strs []string, sep string) string {
-	if len(strs) == 0 {
-		return ""
-	}
-	result := strs[0]
-	for _, s := range strs[1:] {
-		result += sep + s
-	}
-	return result
-}
-
-// splitText splits text into lines that fit within maxWidth characters
-func splitText(text string, maxWidth int) []string {
+func wrapText(text string, maxWidth int) []string {
 	var lines []string
-	words := splitWords(text)
+	words := strings.Fields(text)
 	currentLine := ""
 
 	for _, word := range words {
@@ -126,53 +102,4 @@ func splitText(text string, maxWidth int) []string {
 	}
 
 	return lines
-}
-
-// splitWords splits text into words (handles newlines)
-func splitWords(text string) []string {
-	var words []string
-	for _, line := range splitByNewline(text) {
-		for _, word := range splitBySpace(line) {
-			if word != "" {
-				words = append(words, word)
-			}
-		}
-	}
-	return words
-}
-
-func splitByNewline(s string) []string {
-	var lines []string
-	current := ""
-	for _, r := range s {
-		if r == '\n' || r == '\r' {
-			lines = append(lines, current)
-			current = ""
-		} else {
-			current += string(r)
-		}
-	}
-	if current != "" {
-		lines = append(lines, current)
-	}
-	return lines
-}
-
-func splitBySpace(s string) []string {
-	var words []string
-	current := ""
-	for _, r := range s {
-		if r == ' ' || r == '\t' {
-			if current != "" {
-				words = append(words, current)
-				current = ""
-			}
-		} else {
-			current += string(r)
-		}
-	}
-	if current != "" {
-		words = append(words, current)
-	}
-	return words
 }

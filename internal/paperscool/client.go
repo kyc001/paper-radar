@@ -64,7 +64,7 @@ func (c *Client) Fetch(ctx context.Context, topicQuery string, maxResults int, w
 		paperID := extractPaperID(entry.ID)
 		summary := normalizeWhitespace(entry.Summary)
 		if withKimi && paperID != "" {
-			if kimi, err := c.fetchKimiSummary(ctx, paperID); err == nil && strings.TrimSpace(kimi) != "" {
+			if kimi, err := c.FetchKimiSummary(ctx, paperID); err == nil && strings.TrimSpace(kimi) != "" {
 				summary = kimi
 			}
 		}
@@ -82,7 +82,8 @@ func (c *Client) Fetch(ctx context.Context, topicQuery string, maxResults int, w
 	return papers, nil
 }
 
-func (c *Client) fetchKimiSummary(ctx context.Context, paperID string) (string, error) {
+// FetchKimiSummary fetches and converts a Kimi summary for the given arXiv paper ID.
+func (c *Client) FetchKimiSummary(ctx context.Context, paperID string) (string, error) {
 	endpoint := fmt.Sprintf("%s/arxiv/kimi?paper=%s", c.baseURL, url.QueryEscape(paperID))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -104,7 +105,7 @@ func (c *Client) fetchKimiSummary(ctx context.Context, paperID string) (string, 
 		return "", err
 	}
 
-	text := stripHTML(string(body))
+	text := htmlToMarkdown(string(body))
 	return strings.TrimSpace(text), nil
 }
 
@@ -181,23 +182,68 @@ func normalizeWhitespace(value string) string {
 }
 
 var (
-	htmlTagRe = regexp.MustCompile(`<[^>]+>`)
-	spaceRe   = regexp.MustCompile(`\s+`)
-	arxivIDRe = regexp.MustCompile(`([0-9]{4}\.[0-9]{4,5})(v[0-9]+)?`)
+	arxivIDRe      = regexp.MustCompile(`([0-9]{4}\.[0-9]{4,5})(v[0-9]+)?`)
+	faqQRe         = regexp.MustCompile(`<p\s+class="faq-q">\s*<strong>(Q\d+)</strong>\s*[:：]\s*(.*?)\s*</p>`)
+	faqAOpenRe     = regexp.MustCompile(`<div\s+class="faq-a">\s*`)
+	faqACloseRe    = regexp.MustCompile(`\s*</div>`)
+	htmlTagRe      = regexp.MustCompile(`<[^>]+>`)
+	multiNewlineRe = regexp.MustCompile(`\n{3,}`)
+	horizSpaceRe   = regexp.MustCompile(`[^\S\n]+`)
 )
 
-func stripHTML(input string) string {
-	replaced := strings.NewReplacer(
+// htmlToMarkdown converts the Kimi API HTML response into clean markdown.
+// The Kimi API returns HTML wrappers (<p class="faq-q">, <div class="faq-a">)
+// around properly formatted markdown content with newlines, headings, lists, etc.
+// We extract the markdown content while preserving its formatting.
+func htmlToMarkdown(input string) string {
+	text := input
+
+	// Decode HTML entities first
+	text = strings.NewReplacer(
 		"&nbsp;", " ",
 		"&amp;", "&",
 		"&lt;", "<",
 		"&gt;", ">",
 		"&#39;", "'",
 		"&quot;", `"`,
-	)
-	text := htmlTagRe.ReplaceAllString(input, " ")
-	text = replaced.Replace(text)
-	text = spaceRe.ReplaceAllString(text, " ")
+		"&#x27;", "'",
+	).Replace(text)
+
+	// Convert FAQ question headers to markdown Q markers
+	text = faqQRe.ReplaceAllString(text, "\n$1 : $2")
+
+	// Remove FAQ answer div wrappers
+	text = faqAOpenRe.ReplaceAllString(text, "\n")
+	text = faqACloseRe.ReplaceAllString(text, "\n")
+
+	// Strip remaining HTML tags (replace with empty, NOT space)
+	text = htmlTagRe.ReplaceAllString(text, "")
+
+	// Collapse horizontal whitespace (spaces/tabs) but preserve newlines
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		lines[i] = strings.TrimRight(horizSpaceRe.ReplaceAllString(line, " "), " ")
+	}
+	text = strings.Join(lines, "\n")
+
+	// Clean up excessive newlines (3+ → 2)
+	text = multiNewlineRe.ReplaceAllString(text, "\n\n")
+
+	return strings.TrimSpace(text)
+}
+
+// stripHTML is a simple HTML stripper for non-Kimi content (backward compat).
+func stripHTML(input string) string {
+	text := strings.NewReplacer(
+		"&nbsp;", " ",
+		"&amp;", "&",
+		"&lt;", "<",
+		"&gt;", ">",
+		"&#39;", "'",
+		"&quot;", `"`,
+	).Replace(input)
+	text = htmlTagRe.ReplaceAllString(text, " ")
+	text = regexp.MustCompile(`\s+`).ReplaceAllString(text, " ")
 	return strings.TrimSpace(text)
 }
 
