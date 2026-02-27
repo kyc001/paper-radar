@@ -2,7 +2,7 @@
 
 `paper-radar` 是一个用于论文追踪的 Go CLI：支持多数据源抓取、按关键词打分过滤、去重，并生成每日 Markdown 摘要。
 
-## v0.5.0 功能
+## v0.6.0 功能
 
 - 命令：`fetch`、`digest`、`run`
 - 多数据源抓取：
@@ -25,8 +25,11 @@
   - `-feishu-webhook` > `config.yaml: feishu_webhook` > 环境变量 `PAPER_RADAR_FEISHU_WEBHOOK`
 - **长消息自动分片推送**（适合完整 Kimi 摘要）：
   - `run` 会读取完整 digest，并按 `-notify-max-chars` 自动拆分多条 Feishu 消息发送
+- **PDF 导出**（v0.6.0 新增）：
+  - `digest/run` 支持 `-pdf` 生成 PDF 版本，适合直接阅读和分享
 - 本地状态与去重：`.paper-radar/state.json`
-- 摘要输出：`outputs/YYYY-MM-DD.md`
+- 摘要输出：`outputs/YYYY-MM-DD.md` + `outputs/YYYY-MM-DD.pdf`（可选）
+- CI/CD：GitHub Actions 自动测试 + lint
 
 ## 快速开始
 
@@ -67,6 +70,7 @@ go run ./cmd/paper-radar digest -state .paper-radar/state.json -out outputs
 
 - `-date YYYY-MM-DD` 指定输出日期
 - `-top 20` 仅输出前 20 篇（其余保留在 pending，留待下次 digest）
+- `-pdf` 同时生成 PDF 版本（适合阅读和分享）
 
 ### 3) 一键流程（run = fetch + digest + 可选通知）
 
@@ -84,6 +88,7 @@ go run ./cmd/paper-radar run -config config.yaml -out outputs
 - `-with-kimi`
 - `-feishu-webhook https://open.feishu.cn/open-apis/bot/v2/hook/xxxxx`
 - `-notify-max-chars 2800`（飞书单条消息最大字符数，超出自动分片）
+- `-pdf` 同时生成 PDF 版本
 
 ## 研究方向预设（3D/Video + training-free + memory）
 
