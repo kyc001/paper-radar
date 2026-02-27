@@ -64,6 +64,7 @@ func runDigest(args []string) {
 	outputDir := fs.String("out", "outputs", "Output directory for markdown digest")
 	dateStr := fs.String("date", "", "Digest date (YYYY-MM-DD), defaults to today")
 	topN := fs.Int("top", 0, "Only emit top N papers in this digest (0 means all)")
+	asPDF := fs.Bool("pdf", false, "Also generate PDF output in addition to markdown")
 	fs.Parse(args)
 
 	date := parseDateOrNow(*dateStr)
@@ -73,6 +74,7 @@ func runDigest(args []string) {
 		OutputDir: *outputDir,
 		Date:      date,
 		TopN:      *topN,
+		AsPDF:     *asPDF,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "digest failed: %v\n", err)
@@ -94,6 +96,7 @@ func runAll(ctx context.Context, args []string) {
 	withKimi := fs.Bool("with-kimi", false, "Enable papers.cool Kimi summary enrichment")
 	feishuWebhook := fs.String("feishu-webhook", "", "Feishu bot webhook URL for digest notification")
 	notifyMaxChars := fs.Int("notify-max-chars", 2800, "Max characters per Feishu message chunk")
+	asPDF := fs.Bool("pdf", false, "Also generate PDF output in addition to markdown")
 	fs.Parse(args)
 
 	cfg, err := config.Load(*configPath)
@@ -122,6 +125,7 @@ func runAll(ctx context.Context, args []string) {
 		OutputDir: *outputDir,
 		Date:      date,
 		TopN:      *topN,
+		AsPDF:     *asPDF,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "run failed in digest stage: %v\n", err)
@@ -177,6 +181,6 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "paper-radar: track and score arXiv papers")
 	fmt.Fprintln(os.Stderr, "usage:")
 	fmt.Fprintln(os.Stderr, "  paper-radar fetch  -config config.yaml [-with-kimi]")
-	fmt.Fprintln(os.Stderr, "  paper-radar digest -out outputs [-top 20]")
-	fmt.Fprintln(os.Stderr, "  paper-radar run    -config config.yaml -out outputs [-top 20] [-with-kimi] [-feishu-webhook URL] [-notify-max-chars 2800]")
+	fmt.Fprintln(os.Stderr, "  paper-radar digest -out outputs [-top 20] [-pdf]")
+	fmt.Fprintln(os.Stderr, "  paper-radar run    -config config.yaml -out outputs [-top 20] [-with-kimi] [-feishu-webhook URL] [-notify-max-chars 2800] [-pdf]")
 }
