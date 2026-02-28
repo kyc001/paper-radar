@@ -14,7 +14,7 @@ type DigestOptions struct {
 	OutputDir string
 	Date      time.Time
 	TopN      int
-	AsHTML    bool
+	AsPDF    bool
 }
 
 func RunDigest(opts DigestOptions) (string, int, error) {
@@ -36,12 +36,12 @@ func RunDigest(opts DigestOptions) (string, int, error) {
 		return "", 0, fmt.Errorf("write digest: %w", err)
 	}
 
-	// Generate HTML if requested
-	var htmlPath string
-	if opts.AsHTML {
-		htmlPath, err = digest.WriteHTML(defaultOutputDir(opts.OutputDir), opts.Date, target)
+	// Generate PDF if requested
+	var pdfPath string
+	if opts.AsPDF {
+		pdfPath, err = digest.WritePDF(defaultOutputDir(opts.OutputDir), opts.Date, target)
 		if err != nil {
-			return "", 0, fmt.Errorf("write html: %w", err)
+			return "", 0, fmt.Errorf("write pdf: %w", err)
 		}
 	}
 
@@ -56,8 +56,8 @@ func RunDigest(opts DigestOptions) (string, int, error) {
 		return "", 0, fmt.Errorf("save state: %w", err)
 	}
 
-	if htmlPath != "" {
-		return fmt.Sprintf("%s (HTML: %s)", outputPath, htmlPath), count, nil
+	if pdfPath != "" {
+		return pdfPath, count, nil
 	}
 	return outputPath, count, nil
 }

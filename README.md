@@ -1,6 +1,6 @@
 # paper-radar
 
-`paper-radar` 是一个用于论文追踪的 Go CLI：支持多数据源抓取、按关键词打分过滤、去重，并生成每日 Markdown/HTML/PDF 摘要。
+`paper-radar` 是一个用于论文追踪的 Go CLI：支持多数据源抓取、按关键词打分过滤、去重，并生成每日 Markdown/PDF 摘要。
 
 ## 架构概览
 
@@ -17,9 +17,8 @@
         │             │              │
    ┌────▼────────┐ ┌──▼───────┐  ┌──▼──────────┐
    │ arxiv API   │ │ Markdown │  │ Feishu Bot  │
-   │ papers.cool │ │ HTML     │  │ (Webhook)   │
-   │ + Kimi 总结 │ │ PDF      │  └─────────────┘
-   └────┬────────┘ └──────────┘
+   │ papers.cool │ │ PDF      │  │ (Webhook)   │
+   │ + Kimi 总结 │ └──────────┘  └─────────────┘
         │
    ┌────▼──────────────────────┐
    │  state.json (去重+pending) │
@@ -42,8 +41,7 @@ papers.cool Kimi API (可选)
 Digest 生成
     → splitQSections() 拆分 Q1-Q6 段落 (跳过 Q7 Kimi 推广)
     → BuildMarkdown() → YYYY-MM-DD.md (结构化 Markdown)
-    → WriteHTML() → YYYY-MM-DD.html (带样式的 HTML)
-    → WritePDF() → YYYY-MM-DD.pdf (可选)
+    → WritePDF() → YYYY-MM-DD.pdf (chromedp 渲染，支持 KaTeX 公式)
 ```
 
 ### 关键模块
@@ -56,8 +54,7 @@ Digest 生成
 | `internal/scoring/scorer.go` | 关键词匹配打分 |
 | `internal/state/state.go` | 本地状态管理与去重 |
 | `internal/digest/markdown.go` | Markdown 摘要生成 (Q 段落拆分、元数据表格) |
-| `internal/digest/html.go` | HTML 摘要生成 (带 CSS 样式) |
-| `internal/digest/pdf.go` | PDF 导出 |
+| `internal/digest/pdf.go` | PDF 导出 (goldmark + chromedp + KaTeX) |
 | `internal/notify/feishu.go` | 飞书 Webhook 推送 (自动分片) |
 | `internal/model/model.go` | 核心数据结构 (Paper, ScoredPaper) |
 
@@ -66,9 +63,9 @@ Digest 生成
 - **多数据源**：`arxiv` (官方 API) + `paperscool` (papers.cool feed)
 - **Kimi 摘要增强**：papers.cool 集成 Kimi 论文总结，自动生成 Q1-Q6 结构化摘要
 - **智能格式化**：`htmlToMarkdown()` 保留 Kimi 返回的完整 Markdown 结构（标题、列表、表格、公式块）
-- **关键词打分**：YAML 配置关键词列表，按匹配数量和位置打分
+- **关键词打分**：YAML 配置关键词列表，按匹配次数打分（分数 = 所有关键词在标题+摘要中的出现次数之和）
 - **去重机制**：基于 arXiv ID 的本地状态去重，跨次运行不重复推送
-- **多格式输出**：Markdown + HTML + PDF
+- **多格式输出**：Markdown + PDF（通过 chromedp 渲染，支持中文、表格、KaTeX 公式）
 - **飞书推送**：长消息自动分片，适配飞书消息长度限制
 - **摘要条数控制**：`-top N` 只输出前 N 条，剩余保留在 pending
 
@@ -117,8 +114,7 @@ go build -o paper-radar ./cmd/paper-radar
 
 - `-date YYYY-MM-DD` 指定输出日期
 - `-top 20` 仅输出前 20 篇（其余保留在 pending，留待下次 digest）
-- `-html` 同时生成 HTML 版本
-- `-pdf` 同时生成 PDF 版本
+- `-pdf` 同时生成 PDF 版本（需要系统安装 Chrome/Chromium）
 
 ### 3) 一键流程（run = fetch + digest + 可选通知）
 
@@ -136,7 +132,6 @@ go build -o paper-radar ./cmd/paper-radar
 - `-with-kimi`
 - `-feishu-webhook https://open.feishu.cn/open-apis/bot/v2/hook/xxxxx`
 - `-notify-max-chars 2800`（飞书单条消息最大字符数，超出自动分片）
-- `-html` 同时生成 HTML 版本
 - `-pdf` 同时生成 PDF 版本
 
 ## YAML 配置

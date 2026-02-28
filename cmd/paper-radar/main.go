@@ -41,7 +41,10 @@ func runFetch(ctx context.Context, args []string) {
 	maxResults := fs.Int("max-results", 0, "Override max results per topic")
 	minScore := fs.Int("min-score", 1, "Override minimum score threshold")
 	withKimi := fs.Bool("with-kimi", false, "Enable papers.cool Kimi summary enrichment")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fmt.Fprintf(os.Stderr, "fetch: %v\n", err)
+		os.Exit(2)
+	}
 
 	result, err := app.RunFetch(ctx, app.FetchOptions{
 		ConfigPath: *configPath,
@@ -64,8 +67,11 @@ func runDigest(args []string) {
 	outputDir := fs.String("out", "outputs", "Output directory for markdown digest")
 	dateStr := fs.String("date", "", "Digest date (YYYY-MM-DD), defaults to today")
 	topN := fs.Int("top", 0, "Only emit top N papers in this digest (0 means all)")
-	asHTML := fs.Bool("html", false, "Generate HTML output (can be printed to PDF via browser)")
-	fs.Parse(args)
+	asPDF := fs.Bool("pdf", false, "Generate PDF output via headless Chrome")
+	if err := fs.Parse(args); err != nil {
+		fmt.Fprintf(os.Stderr, "digest: %v\n", err)
+		os.Exit(2)
+	}
 
 	date := parseDateOrNow(*dateStr)
 
@@ -74,7 +80,7 @@ func runDigest(args []string) {
 		OutputDir: *outputDir,
 		Date:      date,
 		TopN:      *topN,
-		AsHTML:    *asHTML,
+		AsPDF:    *asPDF,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "digest failed: %v\n", err)
@@ -96,8 +102,11 @@ func runAll(ctx context.Context, args []string) {
 	withKimi := fs.Bool("with-kimi", false, "Enable papers.cool Kimi summary enrichment")
 	feishuWebhook := fs.String("feishu-webhook", "", "Feishu bot webhook URL for digest notification")
 	notifyMaxChars := fs.Int("notify-max-chars", 2800, "Max characters per Feishu message chunk")
-	asHTML := fs.Bool("html", false, "Generate HTML output (can be printed to PDF via browser)")
-	fs.Parse(args)
+	asPDF := fs.Bool("pdf", false, "Generate PDF output via headless Chrome")
+	if err := fs.Parse(args); err != nil {
+		fmt.Fprintf(os.Stderr, "run: %v\n", err)
+		os.Exit(2)
+	}
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
@@ -125,7 +134,7 @@ func runAll(ctx context.Context, args []string) {
 		OutputDir: *outputDir,
 		Date:      date,
 		TopN:      *topN,
-		AsHTML:    *asHTML,
+		AsPDF:    *asPDF,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "run failed in digest stage: %v\n", err)
@@ -181,6 +190,6 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "paper-radar: track and score arXiv papers")
 	fmt.Fprintln(os.Stderr, "usage:")
 	fmt.Fprintln(os.Stderr, "  paper-radar fetch  -config config.yaml [-with-kimi]")
-	fmt.Fprintln(os.Stderr, "  paper-radar digest -out outputs [-top 20] [-html]")
-	fmt.Fprintln(os.Stderr, "  paper-radar run    -config config.yaml -out outputs [-top 20] [-with-kimi] [-feishu-webhook URL] [-notify-max-chars 2800] [-html]")
+	fmt.Fprintln(os.Stderr, "  paper-radar digest -out outputs [-top 20] [-pdf]")
+	fmt.Fprintln(os.Stderr, "  paper-radar run    -config config.yaml -out outputs [-top 20] [-with-kimi] [-feishu-webhook URL] [-notify-max-chars 2800] [-pdf]")
 }

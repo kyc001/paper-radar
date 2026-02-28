@@ -1,105 +1,132 @@
 package digest
 
 import (
+	"bytes"
+	"context"
 	"fmt"
+	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
-	"github.com/jung-kurt/gofpdf"
+	"github.com/chromedp/cdproto/page"
+	"github.com/chromedp/chromedp"
 	"github.com/kyc001/paper-radar/internal/model"
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
 )
 
+// WritePDF generates a PDF by converting the markdown digest to HTML and
+// rendering it via headless Chrome. KaTeX is loaded from CDN to render
+// LaTeX math formulas.
 func WritePDF(outputDir string, date time.Time, papers []model.ScoredPaper) (string, error) {
 	filename := date.Format("2006-01-02") + ".pdf"
 	path := filepath.Join(outputDir, filename)
 
-	pdf := gofpdf.New("P", "mm", "A4", "")
-	pdf.SetCompression(false) // 禁用压缩，便于调试
-	
-	// 使用内置字体（仅支持 ASCII）
-	pdf.AddPage()
-	pdf.SetFont("Courier", "B", 12)
-	
-	// Title
-	title := fmt.Sprintf("Paper Radar Digest - %s", date.Format("2006-01-02"))
-	pdf.Cell(0, 10, title)
-	pdf.Ln(12)
+	md := BuildMarkdown(date, papers)
 
-	if len(papers) == 0 {
-		pdf.SetFont("Courier", "", 11)
-		pdf.Cell(0, 10, "No new papers matched the configured keywords.")
-	} else {
-		pdf.SetFont("Courier", "", 9)
-		lineHeight := 4.5
-
-		for i, paper := range papers {
-			// Page break if needed
-			if pdf.GetY() > 270 {
-				pdf.AddPage()
-			}
-
-			// Header
-			pdf.SetFont("Courier", "B", 10)
-			pdf.Cell(0, lineHeight, fmt.Sprintf("%d. %s", i+1, truncateString(paper.Paper.Title, 70)))
-			pdf.Ln(lineHeight)
-			
-			// Metadata
-			pdf.SetFont("Courier", "", 8)
-			pdf.Cell(0, lineHeight, fmt.Sprintf("Score: %d", paper.Score))
-			pdf.Ln(lineHeight)
-			pdf.Cell(0, lineHeight, fmt.Sprintf("URL: %s", paper.Paper.URL))
-			pdf.Ln(lineHeight * 1.5)
-
-			// Summary (first 1500 chars)
-			summary := truncateString(paper.Paper.Summary, 1500)
-			lines := wrapText(summary, 90)
-			for _, line := range lines {
-				pdf.Cell(0, lineHeight, line)
-				pdf.Ln(lineHeight)
-			}
-
-			// Separator
-			pdf.Ln(3)
-			pdf.Cell(0, 0, strings.Repeat("-", 180))
-			pdf.Ln(5)
-		}
+	// Markdown → HTML body
+	converter := goldmark.New(goldmark.WithExtensions(extension.Table))
+	var buf bytes.Buffer
+	if err := converter.Convert([]byte(md), &buf); err != nil {
+		return "", fmt.Errorf("markdown to html: %w", err)
 	}
 
-	err := pdf.OutputFileAndClose(path)
-	return path, err
+	html := wrapHTML(buf.String())
+
+	// Write HTML to temp file so Chrome can load external resources (KaTeX CDN)
+	tmpFile, err := os.CreateTemp("", "paper-radar-*.html")
+	if err != nil {
+		return "", fmt.Errorf("create temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+
+	if _, err := tmpFile.WriteString(html); err != nil {
+		tmpFile.Close()
+		return "", fmt.Errorf("write temp file: %w", err)
+	}
+	tmpFile.Close()
+
+	// HTML → PDF via headless Chrome
+	ctx, cancel := chromedp.NewContext(context.Background())
+	defer cancel()
+
+	var pdfBuf []byte
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate("file://"+tmpPath),
+		// Wait for KaTeX to finish rendering
+		chromedp.WaitReady("body"),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			buf, _, err := page.PrintToPDF().
+				WithPrintBackground(true).
+				WithPreferCSSPageSize(true).
+				Do(ctx)
+			if err != nil {
+				return fmt.Errorf("print to PDF: %w", err)
+			}
+			pdfBuf = buf
+			return nil
+		}),
+	); err != nil {
+		return "", fmt.Errorf("chromedp: %w", err)
+	}
+
+	if err := os.WriteFile(path, pdfBuf, 0644); err != nil {
+		return "", fmt.Errorf("write PDF file: %w", err)
+	}
+	return path, nil
 }
 
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen-3] + "..."
+func wrapHTML(body string) string {
+	return `<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js"></script>
+<style>
+@page { size: A4; margin: 20mm 16mm; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Noto Sans CJK SC", "Noto Sans SC", "Microsoft YaHei", "PingFang SC",
+               -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 11pt; line-height: 1.8; color: #1f2937;
+  margin: 0; padding: 0;
 }
-
-func wrapText(text string, maxWidth int) []string {
-	var lines []string
-	words := strings.Fields(text)
-	currentLine := ""
-
-	for _, word := range words {
-		if len(currentLine)+len(word)+1 <= maxWidth {
-			if currentLine == "" {
-				currentLine = word
-			} else {
-				currentLine += " " + word
-			}
-		} else {
-			if currentLine != "" {
-				lines = append(lines, currentLine)
-			}
-			currentLine = word
-		}
-	}
-
-	if currentLine != "" {
-		lines = append(lines, currentLine)
-	}
-
-	return lines
+h1 { font-size: 22pt; color: #2563eb; border-bottom: 3px solid #2563eb; padding-bottom: 8px; }
+h2 { font-size: 16pt; color: #1e40af; margin-top: 32px; page-break-before: always; }
+h2:first-of-type { page-break-before: avoid; }
+h3 { font-size: 13pt; color: #1d4ed8; margin-top: 20px; }
+blockquote {
+  border-left: 4px solid #93c5fd; background: #eff6ff;
+  margin: 12px 0; padding: 8px 16px; color: #374151;
+}
+table { width: 100%; border-collapse: collapse; font-size: 10pt; margin: 12px 0; }
+th, td { border: 1px solid #d1d5db; padding: 8px 12px; text-align: left; }
+th { background: #f1f5f9; font-weight: 700; }
+tr:nth-child(even) td { background: #f8fafc; }
+ul, ol { padding-left: 24px; }
+li { margin: 4px 0; }
+code { background: #f3f4f6; padding: 2px 6px; border-radius: 3px; font-size: 10pt; }
+strong { color: #111827; }
+hr { border: none; border-top: 2px dashed #d1d5db; margin: 32px 0; page-break-after: avoid; }
+a { color: #2563eb; text-decoration: none; }
+@media print {
+  h2 { page-break-before: always; }
+  h2:first-of-type { page-break-before: avoid; }
+  table, blockquote { page-break-inside: avoid; }
+}
+</style>
+</head><body>` + body + `
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</body></html>`
 }
